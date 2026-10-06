@@ -1,42 +1,47 @@
 name: Scheduled Check-In Job
 on:
-  schedule:
-    - cron: '0 9 * * *'  # 每天 09:00 UTC 执行，UTC+8 = 北京时间17点
-  workflow_dispatch:  # 允许手动触发
+schedule:
+
+- cron: '0 9 * * *'  # 每天 09:00 UTC 执行，注意时区！UTC+8 要 + 8 小时
+workflow_dispatch:  # 允许手动触发
 jobs:
-  checkin:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
-      
-    - name: Set up Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '16'
-    - name: Install dependencies
-      run: |
-        npm install
-        npm install node-fetch
-    - name: Run scheduled check-in
-      id: checkin_task # 给这一步设置id，用来判断成功失败
-      run: |
-        node _worker.js  
-      env:
-        JC_TYPE: ${{ secrets.JC_TYPE }} 
-        DOMAIN: ${{ secrets.DOMAIN }}  
-        USERNAME: ${{ secrets.USERNAME }}
-        PASSWORD: ${{ secrets.PASSWORD }}
-        TG_TOKEN: ${{ secrets.TG_TOKEN }}
-        TG_ID: ${{ secrets.TG_ID }}
-    # Bark 通知：成功
-    - name: Bark Notify Success
-      if: success()
-      run: |
-        curl -s --fail "https://api.day.app/${{ secrets.BARK_KEY }}/签到任务✅?body=签到脚本执行成功&sound=shake"
-    # Bark 通知：失败
-    - name: Bark Notify Fail
-      if: failure()
-      run: |
-        curl -s --fail "https://api.day.app/${{ secrets.BARK_KEY }}/签到任务❌?body=签到脚本执行失败，请检查日志&sound=shake"
+checkin:
+runs-on: ubuntu-latest
+
+steps:
+
+- name: Checkout repository
+uses: actions/checkout@v2
+- name: Set up Node.js
+uses: actions/setup-node@v3
+with:
+node-version: '16'
+- name: Install dependencies
+run: |
+npm install
+npm install node-fetch
+- name: Run scheduled check-in
+id: checkin_task # 给这一步设置 id，用来判断成功失败
+run: |
+node _worker.js
+env:
+JC_TYPE: ${{ secrets.JC_TYPE }}
+DOMAIN: ${{ secrets.DOMAIN }}
+USERNAME: ${{ secrets.USERNAME }}
+PASSWORD: ${{ secrets.PASSWORD }}
+TG_TOKEN: ${{ secrets.TG_TOKEN }}
+TG_ID: ${{ secrets.TG_ID }}
+
+# Bark 通知：成功
+
+- name: Bark Notify Success
+if: success()
+run: |
+curl -s "[https://api.day.app/$](https://api.day.app/$){{secrets.BARK_KEY}}/ 签到任务✅/ 签到脚本执行成功 "
+
+# Bark 通知：失败
+
+- name: Bark Notify Fail
+if: failure()
+run: |
+curl -s "[https://api.day.app/$](https://api.day.app/$){{secrets.BARK_KEY}}/ 签到任务❌/ 签到脚本执行失败，请检查日志 "
