@@ -1,7 +1,7 @@
 name: Scheduled Check-In Job
 on:
   schedule:
-    - cron: '0 9 * * *'  # 每天 09:00 UTC 执行，注意时区！UTC+8要+8小时
+    - cron: '0 9 * * *'  # 每天 09:00 UTC 执行，UTC+8 = 北京时间17点
   workflow_dispatch:  # 允许手动触发
 jobs:
   checkin:
@@ -34,9 +34,9 @@ jobs:
     - name: Bark Notify Success
       if: success()
       run: |
-        curl -s "https://api.day.app/${{ secrets.BARK_KEY }}/签到任务✅/签到脚本执行成功"
+        curl -s --fail "https://api.day.app/${{ secrets.BARK_KEY }}/签到任务✅?body=签到脚本执行成功&sound=shake"
     # Bark 通知：失败
     - name: Bark Notify Fail
       if: failure()
       run: |
-        curl -s "https://api.day.app/${{ secrets.BARK_KEY }}/签到任务❌/签到脚本执行失败，请检查日志"
+        curl -s --fail "https://api.day.app/${{ secrets.BARK_KEY }}/签到任务❌?body=签到脚本执行失败，请检查日志&sound=shake"
