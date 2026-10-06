@@ -1,30 +1,28 @@
 name: Scheduled Check-In Job
 on:
   schedule:
-    - cron: '0 9 * * *'  # UTC 09:00 = 北京时间 17:00
-  workflow_dispatch: # 手动触发，修复缩进后这个触发器会正常生效，页面出现Run workflow按钮
+    - cron: '0 9 * * *'   # UTC 09:00 = 北京时间 17:00；想改北京时间09:00就改成 '0 1 * * *'
+  workflow_dispatch:      # 手动触发入口
 
 jobs:
   checkin:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4 # 升级到v4，v2已经老旧
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '16'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           npm install
           npm install node-fetch
 
-      - name: Run scheduled check-in
-        id: checkin_task
-        run: |
-          node _worker.js
+      - name: Run Check-In
+        id: checkin
         env:
           JC_TYPE: ${{ secrets.JC_TYPE }}
           DOMAIN: ${{ secrets.DOMAIN }}
@@ -32,13 +30,43 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_ID: ${{ secrets.TG_ID }}
-
-      # Bark通知优化：用 always() 不管成功失败都会执行，通过job.status判断，精简代码
-      - name: Bark 推送通知
-        if: always()
         run: |
-          if [[ "${{ job.status }}" == "success" ]];then
-            curl -s "https://api.day.app/${{ secrets.BARK_KEY }}/签到任务✅/签到脚本执行成功"
+          set -o pipefail
+          node _worker.js 2>&1 | tee output.log
+
+      - name: Bark Notification
+        if: always()
+        env:
+          BARK_KEY: ${{ secrets.BARK_KEY }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          # 从日志提取 ret 和 msg
+          RET=$(grep -oP 'ret:\s*\K\d+' output.log | head -1)
+          RAW_MSG=$(grep -oP "msg:\s*'\K[^']*" output.log | head -1)
+          CLEAN_MSG=$(echo "$RAW_MSG" | sed 's/\\n/ /g' | tr -s ' ')
+
+          echo "===== Bark 推送内容 ====="
+          echo "ret=$RET"
+          echo "msg=$CLEAN_MSG"
+
+          # 根据状态决定标题
+          if [ "$JOB_STATUS" != "success" ]; then
+            TITLE="签到任务❌"
+            BODY="脚本执行失败，请查看 Actions 日志"
+          elif [ "$RET" = "0" ]; then
+            TITLE="签到任务⚠️"
+            BODY="$CLEAN_MSG"
+          elif [ "$RET" = "1" ]; then
+            TITLE="签到任务✅"
+            BODY="$CLEAN_MSG"
           else
-            curl -s "https://api.day.app/${{ secrets.BARK_KEY }}/签到任务❌/签到脚本执行失败，请检查日志"
+            TITLE="签到任务ℹ️"
+            BODY="${CLEAN_MSG:-未知结果}"
           fi
+
+          # URL 编码
+          ENC_TITLE=$(node -e "console.log(encodeURIComponent(process.argv[1]))" "$TITLE")
+          ENC_BODY=$(node -e "console.log(encodeURIComponent(process.argv[1]))" "$BODY")
+
+          curl -s "https://api.day.app/${BARK_KEY}/${ENC_TITLE}/${ENC_BODY}?group=签到脚本&ttl=600"
+          echo ""
