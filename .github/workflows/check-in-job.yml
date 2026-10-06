@@ -1,47 +1,44 @@
 name: Scheduled Check-In Job
 on:
-schedule:
+  schedule:
+    - cron: '0 9 * * *'  # UTC 09:00 = 北京时间 17:00
+  workflow_dispatch: # 手动触发，修复缩进后这个触发器会正常生效，页面出现Run workflow按钮
 
-- cron: '0 9 * * *'  # 每天 09:00 UTC 执行，注意时区！UTC+8 要 + 8 小时
-workflow_dispatch:  # 允许手动触发
 jobs:
-checkin:
-runs-on: ubuntu-latest
+  checkin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4 # 升级到v4，v2已经老旧
 
-steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
 
-- name: Checkout repository
-uses: actions/checkout@v2
-- name: Set up Node.js
-uses: actions/setup-node@v3
-with:
-node-version: '16'
-- name: Install dependencies
-run: |
-npm install
-npm install node-fetch
-- name: Run scheduled check-in
-id: checkin_task # 给这一步设置 id，用来判断成功失败
-run: |
-node _worker.js
-env:
-JC_TYPE: ${{ secrets.JC_TYPE }}
-DOMAIN: ${{ secrets.DOMAIN }}
-USERNAME: ${{ secrets.USERNAME }}
-PASSWORD: ${{ secrets.PASSWORD }}
-TG_TOKEN: ${{ secrets.TG_TOKEN }}
-TG_ID: ${{ secrets.TG_ID }}
+      - name: Install dependencies
+        run: |
+          npm install
+          npm install node-fetch
 
-# Bark 通知：成功
+      - name: Run scheduled check-in
+        id: checkin_task
+        run: |
+          node _worker.js
+        env:
+          JC_TYPE: ${{ secrets.JC_TYPE }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+          USERNAME: ${{ secrets.USERNAME }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_ID: ${{ secrets.TG_ID }}
 
-- name: Bark Notify Success
-if: success()
-run: |
-curl -s "[https://api.day.app/$](https://api.day.app/$){{secrets.BARK_KEY}}/ 签到任务✅/ 签到脚本执行成功 "
-
-# Bark 通知：失败
-
-- name: Bark Notify Fail
-if: failure()
-run: |
-curl -s "[https://api.day.app/$](https://api.day.app/$){{secrets.BARK_KEY}}/ 签到任务❌/ 签到脚本执行失败，请检查日志 "
+      # Bark通知优化：用 always() 不管成功失败都会执行，通过job.status判断，精简代码
+      - name: Bark 推送通知
+        if: always()
+        run: |
+          if [[ "${{ job.status }}" == "success" ]];then
+            curl -s "https://api.day.app/${{ secrets.BARK_KEY }}/签到任务✅/签到脚本执行成功"
+          else
+            curl -s "https://api.day.app/${{ secrets.BARK_KEY }}/签到任务❌/签到脚本执行失败，请检查日志"
+          fi
